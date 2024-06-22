@@ -1,24 +1,19 @@
-# practice
-
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
-import shap
+from tensorflow.keras.layers import LSTM, Dense, Bidirectional
 
 
-# Load your dataset
-# df = pd.read_csv('your_data.csv')  # Uncomment this line to load your actual dataset
+# Example loading data
+# df = pd.read_csv('your_data.csv')  # Uncomment this and load your actual dataset
 
 # Assuming the data is loaded in df
-# Example creation of the DataFrame (remove when using actual dataset)
 np.random.seed(0)
 date_rng = pd.date_range(start='2020-01-01', end='2020-06-01', freq='T')
 df = pd.DataFrame(date_rng, columns=['datetime'])
-df = df.assign(**{f'feature{i}': np.random.randn(len(df)) for i in range(1, 32)})
+df = df.assign(**{f'feature{i}': np.random.randn(len(df)) for i in range(1, 31)})
 df['target'] = np.random.randn(len(df))
 
 # Convert datetime column to datetime object if necessary
@@ -67,11 +62,16 @@ X_test = X_test.reshape((X_test.shape[0], X_test.shape[1], X_test.shape[2]))
 
 
 
+
+
+
+from tensorflow.keras.layers import Bidirectional
+
 model = Sequential()
-# First LSTM layer with 100 units, returns full sequence
-model.add(LSTM(100, return_sequences=True, input_shape=(seq_length, X_train.shape[2])))
-# Second LSTM layer with 50 units, returns only last output
-model.add(LSTM(50))
+# First Bidirectional LSTM layer with 100 units, returns full sequence
+model.add(Bidirectional(LSTM(100, return_sequences=True), input_shape=(seq_length, X_train.shape[2])))
+# Second Bidirectional LSTM layer with 50 units, returns only last output
+model.add(Bidirectional(LSTM(50)))
 # Dense layer to output the final prediction
 model.add(Dense(1))
 
@@ -80,6 +80,11 @@ model.compile(optimizer='adam', loss='mean_squared_error')
 
 # Fit the model on the training data
 model.fit(X_train, y_train, epochs=10, batch_size=64, validation_split=0.2)
+
+
+
+
+
 
 
 
@@ -97,7 +102,7 @@ plt.plot(y_test_scaled, label='Actual')
 plt.plot(y_pred_scaled, label='Predicted')
 plt.xlabel('Time')
 plt.ylabel('Value')
-plt.title('LSTM Time Series Prediction')
+plt.title('Bidirectional LSTM Time Series Prediction')
 plt.legend()
 plt.show()
 
@@ -105,11 +110,46 @@ plt.show()
 
 
 
-# Use a subset of training data for the explainer due to computational cost
-explainer = shap.KernelExplainer(model.predict, X_train[:100])
-# Using a subset of test data for SHAP values
-shap_values = explainer.shap_values(X_test[:10], nsamples=100)
 
-# Plot SHAP values for a specific instance
-shap.initjs()
-shap.force_plot(explainer.expected_value, shap_values[0][0], features_scaled_df.columns)
+
+import shap
+
+# Sample a subset of the training data to use for the explainer due to computational cost
+X_train_sample = X_train[:100]
+
+# Define a function to predict using the model
+def predict_with_model(data):
+    return model.predict(data)
+
+# Create a SHAP explainer
+explainer = shap.KernelExplainer(predict_with_model, X_train_sample)
+
+# Using a subset of the test data for SHAP values
+X_test_sample = X_test[:10]
+
+# Calculate SHAP values
+shap_values = explainer.shap_values(X_test_sample, nsamples=100)
+
+# Convert SHAP values to a numpy array for easier plotting
+shap_values = np.array(shap_values)
+
+# Sum SHAP values for each feature across all time steps
+feature_importance = np.sum(np.abs(shap_values), axis=(0, 2))
+
+# Normalize the feature importance
+feature_importance /= np.sum(feature_importance)
+
+# Plot the feature importance
+feature_names = features.columns
+
+plt.figure(figsize=(10, 6))
+plt.barh(range(len(feature_names)), feature_importance)
+plt.yticks(range(len(feature_names)), feature_names)
+plt.xlabel('Feature Importance')
+plt.title('Feature Importance using SHAP Values')
+plt.show()
+
+
+
+
+
